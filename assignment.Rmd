@@ -1,0 +1,66 @@
+---
+title: "assignment"
+output: html_document
+---
+Prediction Assignment Writeup
+Prepared by Daria Yakovleva
+
+Step 1 - loading libraries and dataset. There is a training dataset with almost 20 thousands observations and a test dataset with 20 observations.  
+```{r loading}
+library('caret')
+library('randomForest')
+library('rpart')
+library('rpart.plot')
+library('RColorBrewer')
+library('rattle')
+
+data_train <- read.csv("pml-training.csv", header = TRUE, na.strings=c("NA","#DIV/0!",""))
+data_test <- read.csv("pml-testing.csv", header = TRUE, na.strings=c("NA","#DIV/0!",""))
+```
+
+Step 2 - data cleaning. The research doesn't depends on time, so time-dependent parameters can be eliminated. So, the set of parameters will consist of all variables with name consisting of "arm", "forearm", "dumbbell", "belt".  Besides, variables which have a lot of NA or missing value can be removed from the datasets, too. 
+```{r cleaning}
+missing_obs <- sapply(data_train, function (x) any(is.na(x) | x == ""))
+var_for_research <- !missing_obs & grepl("belt|[^(fore)]arm|dumbbell|forearm|classe", names(missing_obs))
+data_var_train <- names(missing_obs)[var_for_research]
+trainset <- data_train [ ,data_var_train]
+```
+
+As a result, the whole training set is to consist of 1 factor variable as a target, while others are numeric and integer. 
+```{r cleaningchecking}
+table(sapply(trainset[1,], class))
+colnames(trainset)
+```
+Step 3 - data partition. While performing prediction, 70% of dataset will used for training purposes and 30% - for testing. Cross Validation is performed via 7 separated folds. 
+```{r paritioning}
+inTrain <- createDataPartition(trainset$classe, p = 0.7, list = FALSE)
+training <- trainset[inTrain,]
+testing <- trainset[-inTrain,]
+
+dim(training)
+dim(testing)
+
+cv_control <- trainControl(method="cv", number=7)
+```
+
+Step 4 - building a random forest model and checking its quality. The expected accuracy is higher than for decision trees - more than 80%.
+
+```{r randomforest}
+randForFit <- train(classe ~ ., data = training, method = "rf", trControl = cv_control)
+randForFit
+plot(randForFit, main ="Random Forest Model")
+```
+OOB error rate (expected out of sample error) is low  (0,52%) and the plot depicts that after building 100 trees the model doesn't achieve significant improvements into error rate reduction. 
+
+```{r randomforestres}
+predictionRF <- predict(randForFit, testing, type = "class")
+confusionMatrix(predictionRF, testing$classe)
+```
+Random Forest model shows really good result - the accuracy of predicitons using the validation set is more than 99%. 
+
+Step 5 - application of 20 test cases. 
+
+```{r testing}
+predictionTest <- predict(randForFit, newdata = data_test)
+predictionTest
+```
